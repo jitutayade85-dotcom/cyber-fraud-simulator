@@ -48,32 +48,59 @@ jobs:
       - name: Enable Core Library Desugaring
         run: |
           python3 -c '
-          path = "android/app/build.gradle"
+          import os
+
+          # Modern Flutter (this project uses stable-3.47.5) generates
+          # Kotlin DSL build files (build.gradle.kts) by default. Older
+          # versions generated Groovy (build.gradle). Detect whichever
+          # one actually exists instead of assuming.
+          groovy_path = "android/app/build.gradle"
+          kts_path = "android/app/build.gradle.kts"
+
+          if os.path.exists(kts_path):
+              path = kts_path
+              is_kts = True
+          elif os.path.exists(groovy_path):
+              path = groovy_path
+              is_kts = False
+          else:
+              raise FileNotFoundError("Neither build.gradle nor build.gradle.kts found under android/app/")
+
           with open(path, "r") as f:
               c = f.read()
 
           # Anchor on "android {" which always exists, instead of the
           # inner compileOptions block which may or may not be present
           # depending on the Flutter template version.
-          if "coreLibraryDesugaringEnabled" not in c:
-              c = c.replace(
-                  "android {",
-                  "android {\n    compileOptions {\n        coreLibraryDesugaringEnabled true\n        sourceCompatibility JavaVersion.VERSION_1_8\n        targetCompatibility JavaVersion.VERSION_1_8\n    }",
-                  1
-              )
+          if "coreLibraryDesugaringEnabled" not in c and "isCoreLibraryDesugaringEnabled" not in c:
+              if is_kts:
+                  block = "android {\n    compileOptions {\n        isCoreLibraryDesugaringEnabled = true\n        sourceCompatibility = JavaVersion.VERSION_1_8\n        targetCompatibility = JavaVersion.VERSION_1_8\n    }"
+              else:
+                  block = "android {\n    compileOptions {\n        coreLibraryDesugaringEnabled true\n        sourceCompatibility JavaVersion.VERSION_1_8\n        targetCompatibility JavaVersion.VERSION_1_8\n    }"
+              c = c.replace("android {", block, 1)
 
           # Append a fresh dependencies block at the end of the file.
           # Gradle allows multiple dependencies {} blocks in one file,
           # so this is safe even if one already exists.
           if "desugar_jdk_libs" not in c:
-              c += "\n\ndependencies {\n    coreLibraryDesugaring \"com.android.tools:desugar_jdk_libs:2.1.4\"\n}\n"
+              if is_kts:
+                  c += "\n\ndependencies {\n    coreLibraryDesugaring(\"com.android.tools:desugar_jdk_libs:2.1.4\")\n}\n"
+              else:
+                  c += "\n\ndependencies {\n    coreLibraryDesugaring \"com.android.tools:desugar_jdk_libs:2.1.4\"\n}\n"
 
           with open(path, "w") as f:
               f.write(c)
+
+          print(f"Patched: {path}")
           '
 
       - name: Debug - Print build.gradle
-        run: cat android/app/build.gradle
+        run: |
+          if [ -f android/app/build.gradle.kts ]; then
+            cat android/app/build.gradle.kts
+          else
+            cat android/app/build.gradle
+          fi
 
       - name: Install Dependencies
         run: flutter pub get
