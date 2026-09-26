@@ -44,6 +44,28 @@ jobs:
               f.write(c)
           '
 
+      - name: Enable Core Library Desugaring
+        run: |
+          python3 -c '
+          path = "android/app/build.gradle"
+          with open(path, "r") as f:
+              c = f.read()
+          if "coreLibraryDesugaringEnabled" not in c:
+              c = c.replace(
+                  "compileOptions {",
+                  "compileOptions {\n        coreLibraryDesugaringEnabled true",
+                  1
+              )
+          if "desugar_jdk_libs" not in c:
+              c = c.replace(
+                  "dependencies {",
+                  "dependencies {\n    coreLibraryDesugaring \"com.android.tools:desugar_jdk_libs:2.1.4\"",
+                  1
+              )
+          with open(path, "w") as f:
+              f.write(c)
+          '
+
       - name: Install Dependencies
         run: flutter pub get
 
