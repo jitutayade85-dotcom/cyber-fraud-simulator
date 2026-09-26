@@ -39,7 +39,8 @@ jobs:
               <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
               <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/>
           """
-          c = c.replace("<application", perms + "\n    <application")
+          if "RECEIVE_BOOT_COMPLETED" not in c:
+              c = c.replace("<application", perms + "\n    <application")
           with open("android/app/src/main/AndroidManifest.xml", "w") as f:
               f.write(c)
           '
@@ -50,21 +51,29 @@ jobs:
           path = "android/app/build.gradle"
           with open(path, "r") as f:
               c = f.read()
+
+          # Anchor on "android {" which always exists, instead of the
+          # inner compileOptions block which may or may not be present
+          # depending on the Flutter template version.
           if "coreLibraryDesugaringEnabled" not in c:
               c = c.replace(
-                  "compileOptions {",
-                  "compileOptions {\n        coreLibraryDesugaringEnabled true",
+                  "android {",
+                  "android {\n    compileOptions {\n        coreLibraryDesugaringEnabled true\n        sourceCompatibility JavaVersion.VERSION_1_8\n        targetCompatibility JavaVersion.VERSION_1_8\n    }",
                   1
               )
+
+          # Append a fresh dependencies block at the end of the file.
+          # Gradle allows multiple dependencies {} blocks in one file,
+          # so this is safe even if one already exists.
           if "desugar_jdk_libs" not in c:
-              c = c.replace(
-                  "dependencies {",
-                  "dependencies {\n    coreLibraryDesugaring \"com.android.tools:desugar_jdk_libs:2.1.4\"",
-                  1
-              )
+              c += "\n\ndependencies {\n    coreLibraryDesugaring \"com.android.tools:desugar_jdk_libs:2.1.4\"\n}\n"
+
           with open(path, "w") as f:
               f.write(c)
           '
+
+      - name: Debug - Print build.gradle
+        run: cat android/app/build.gradle
 
       - name: Install Dependencies
         run: flutter pub get
