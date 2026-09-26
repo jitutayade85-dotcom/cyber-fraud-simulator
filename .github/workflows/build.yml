@@ -5,7 +5,7 @@ on:
     branches: [ main, master ]
   pull_request:
     branches: [ main, master ]
-  workflow_dispatch: # Isse aap manually bhi "Run workflow" button daba kar APK bana sakte hain
+  workflow_dispatch:
 
 jobs:
   build:
@@ -13,33 +13,32 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1. Code checkout
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      # 2. Java 17 Setup (Android build ke liye zaroori)
       - name: Set up Java
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
 
-      # 3. Flutter SDK Setup
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
           cache: true
 
-      # 4. Dependencies download
+      - name: Auto-Generate Android Scaffold & Permissions
+        run: |
+          flutter create --platforms=android --org com.cep.cybersafe .
+          sed -i '/<application/i \    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>\n    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>\n    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/>' android/app/src/main/AndroidManifest.xml
+
       - name: Install Dependencies
         run: flutter pub get
 
-      # 5. APK Build (Release Mode)
       - name: Build APK
         run: flutter build apk --release
 
-      # 6. APK ko download ke liye available karna
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
