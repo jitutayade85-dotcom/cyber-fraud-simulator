@@ -46,25 +46,46 @@ jobs:
               f.write(c)
           '
           
-          # Core Library Desugaring aur MultiDex enable karein
+          # Core Library Desugaring & MultiDex inject karein (Regex se)
           python3 -c '
-          import os
-          # Handle build.gradle ya build.gradle.kts
-          target_file = "android/app/build.gradle.kts" if os.path.exists("android/app/build.gradle.kts") else "android/app/build.gradle"
-          with open(target_file, "r") as f:
-              code = f.read()
+          import os, re
           
-          if target_file.endswith(".kts"):
-              code = code.replace("compileOptions {", "compileOptions {\n        isCoreLibraryDesugaringEnabled = true")
-              code = code.replace("defaultConfig {", "defaultConfig {\n        multiDexEnabled = true")
-              code += "\ndependencies {\n    coreLibraryDesugaring(\"com.android.tools:desugar_jdk_libs:2.1.4\")\n}\n"
+          files = ["android/app/build.gradle.kts", "android/app/build.gradle"]
+          target_file = next((f for f in files if os.path.exists(f)), None)
+          if not target_file:
+              raise FileNotFoundError("Gradle file nahi mili!")
+          
+          is_kts = target_file.endswith(".kts")
+          with open(target_file, "r") as f:
+              c = f.read()
+          
+          # compileOptions check & inject
+          if re.search(r"compileOptions\s*\{", c):
+              opt = "isCoreLibraryDesugaringEnabled = true" if is_kts else "coreLibraryDesugaringEnabled true"
+              c = re.sub(r"(compileOptions\s*\{)", r"\1\n        " + opt, c)
           else:
-              code = code.replace("compileOptions {", "compileOptions {\n        coreLibraryDesugaringEnabled true")
-              code = code.replace("defaultConfig {", "defaultConfig {\n        multiDexEnabled true")
-              code += "\ndependencies {\n    coreLibraryDesugaring \"com.android.tools:desugar_jdk_libs:2.1.4\"\n}\n"
+              opt_block = "compileOptions {\n        isCoreLibraryDesugaringEnabled = true\n    }" if is_kts else "compileOptions {\n        coreLibraryDesugaringEnabled true\n    }"
+              c = re.sub(r"(android\s*\{)", r"\1\n    " + opt_block, c)
+          
+          # defaultConfig multiDex inject
+          if re.search(r"defaultConfig\s*\{", c):
+              md = "multiDexEnabled = true" if is_kts else "multiDexEnabled true"
+              c = re.sub(r"(defaultConfig\s*\{)", r"\1\n        " + md, c)
+          
+          # dependencies block inject
+          dep_line = "coreLibraryDesugaring(\"com.android.tools:desugar_jdk_libs:2.1.4\")" if is_kts else "coreLibraryDesugaring \"com.android.tools:desugar_jdk_libs:2.1.4\""
+          if re.search(r"dependencies\s*\{", c):
+              c = re.sub(r"(dependencies\s*\{)", r"\1\n    " + dep_line, c)
+          else:
+              c += f"\ndependencies {{\n    {dep_line}\n}}\n"
+          
+          # Ensure desugaring was added
+          if "coreLibraryDesugaring" not in c:
+              raise ValueError("Desugaring inject nahi ho payi!")
           
           with open(target_file, "w") as f:
-              f.write(code)
+              f.write(c)
+          print(f"Successfully configured {target_file} with Core Library Desugaring!")
           '
 
       - name: Install Dependencies
