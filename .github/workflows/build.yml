@@ -28,9 +28,11 @@ jobs:
           channel: 'stable'
           cache: true
 
-      - name: Auto-Generate Android Scaffold & Configure Permissions
+      - name: Auto-Generate Android Scaffold & Configure Build
         run: |
           flutter create --platforms=android --org com.cep.cybersafe .
+          
+          # Android permissions inject karein
           python3 -c '
           with open("android/app/src/main/AndroidManifest.xml", "r") as f:
               c = f.read()
@@ -42,6 +44,27 @@ jobs:
           c = c.replace("<application", perms + "\n    <application")
           with open("android/app/src/main/AndroidManifest.xml", "w") as f:
               f.write(c)
+          '
+          
+          # Core Library Desugaring aur MultiDex enable karein
+          python3 -c '
+          import os
+          # Handle build.gradle ya build.gradle.kts
+          target_file = "android/app/build.gradle.kts" if os.path.exists("android/app/build.gradle.kts") else "android/app/build.gradle"
+          with open(target_file, "r") as f:
+              code = f.read()
+          
+          if target_file.endswith(".kts"):
+              code = code.replace("compileOptions {", "compileOptions {\n        isCoreLibraryDesugaringEnabled = true")
+              code = code.replace("defaultConfig {", "defaultConfig {\n        multiDexEnabled = true")
+              code += "\ndependencies {\n    coreLibraryDesugaring(\"com.android.tools:desugar_jdk_libs:2.1.4\")\n}\n"
+          else:
+              code = code.replace("compileOptions {", "compileOptions {\n        coreLibraryDesugaringEnabled true")
+              code = code.replace("defaultConfig {", "defaultConfig {\n        multiDexEnabled true")
+              code += "\ndependencies {\n    coreLibraryDesugaring \"com.android.tools:desugar_jdk_libs:2.1.4\"\n}\n"
+          
+          with open(target_file, "w") as f:
+              f.write(code)
           '
 
       - name: Install Dependencies
